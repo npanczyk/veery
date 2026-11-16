@@ -30,12 +30,15 @@ def lcb(node, c):
     # if all the children are dead, return None
     if not live_children:
         return None
+    # otherwise, grab the scores (Q) and the number of visits per live-child node (N)
     Qs = [child.Q for child in live_children]
     Ns = [child.N for child in live_children]
     lcbs = []
+    # now calculate the lower confidence bounds for all the alive children
     for Q, N in zip(Qs, Ns):
         lcbs.append(Q - c * np.sqrt(np.log(node.N) / N))
 
+    # select the minimum
     best_child_index = np.argmin(np.array(lcbs))
 
     return live_children[best_child_index]

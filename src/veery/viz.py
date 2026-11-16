@@ -245,6 +245,98 @@ def plot_tree_structure(tree, save_path=None):
     return fig, ax
 
 
+def plot_tree_diagram(tree, max_depth=None, decimals=2, save_path=None):
+    """Draws a small MCTS tree as a top-down node-link diagram, with N and Q written in each node. Failing nodes are shaded red and dead (terminal or exhausted) nodes are shaded gray. Meant for small trees; use plot_tree_structure for large ones.
+
+    Args:
+        tree (list[Node] or Node): all nodes in the MCTS tree with the root at tree[0], or the node to draw the (sub)tree from
+        max_depth (int, opt): deepest level to draw, relative to the root. Nodes with hidden children are marked with "+k". Defaults to None and draws the whole tree.
+        decimals (int, opt): number of decimals shown for Q. Defaults to 2.
+        save_path (str, opt): file path for the saved figure. Defaults to None and doesn't save the figure.
+
+    Returns:
+        tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
+    """
+    root = tree[0] if isinstance(tree, list) else tree
+
+    def shown_children(node, depth):
+        if max_depth is not None and depth >= max_depth:
+            return []
+        return node.children
+
+    # x layout: leaves get consecutive slots, parents sit at the mean of their children
+    # (iterative post-order, since episode depth can exceed Python's recursion limit)
+    x, depth_of, slot = {}, {root: 0}, 0
+    stack = [(root, False)]
+    while stack:
+        node, visited = stack.pop()
+        kids = shown_children(node, depth_of[node])
+        if kids and not visited:
+            stack.append((node, True))
+            for c in reversed(kids):
+                depth_of[c] = depth_of[node] + 1
+                stack.append((c, False))
+        elif kids:
+            x[node] = np.mean([x[c] for c in kids])
+        else:
+            x[node] = slot
+            slot += 1
+
+    n_levels = max(depth_of.values()) + 1
+    fig, ax = plt.subplots(figsize=(max(4, 1.3 * slot), max(3, 1.3 * n_levels)))
+
+    for node in x:
+        for c in shown_children(node, depth_of[node]):
+            ax.plot(
+                [x[node], x[c]],
+                [-depth_of[node], -depth_of[c]],
+                color="gray",
+                linewidth=1,
+                zorder=1,
+            )
+
+    for node in x:
+        if node.parent is not None and node.path_rho < 0:
+            face = "mistyrose"
+        elif node.dead:
+            face = "lightgray"
+        else:
+            face = "white"
+        ax.text(
+            x[node],
+            -depth_of[node],
+            f"N={node.N}\nQ={node.Q:.{decimals}f}",
+            ha="center",
+            va="center",
+            fontsize=8,
+            bbox=dict(boxstyle="round", facecolor=face, edgecolor="black"),
+            zorder=2,
+        )
+        hidden = len(node.children) - len(shown_children(node, depth_of[node]))
+        if hidden:
+            ax.text(
+                x[node],
+                -depth_of[node] - 0.32,
+                f"+{hidden}",
+                ha="center",
+                va="center",
+                fontsize=7,
+                color="gray",
+            )
+
+    handles = [
+        plt.Rectangle((0, 0), 1, 1, facecolor=f, edgecolor="black", label=l)
+        for f, l in [("mistyrose", "Failure"), ("lightgray", "Dead")]
+    ]
+    ax.legend(handles=handles, loc="upper right", fontsize=8)
+    ax.set_xlim(-0.75, slot - 0.25)
+    ax.set_ylim(-n_levels + 0.4, 0.6)
+    ax.axis("off")
+    if save_path:
+        fig.savefig(save_path, dpi=400, bbox_inches="tight")
+    return fig, ax
+
+
 def plot_robustness(history, threshold=0.03, time=None, ax=None, save_dir=None):
     """Plot absolute percent power deviation for one rollout with spec bound and rho arrow."""
     if ax is None:
