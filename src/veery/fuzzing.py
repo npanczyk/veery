@@ -1,3 +1,6 @@
+"""Disturbance distributions, following the disturbance model (xo, xa, xs) in
+Kochenderfer et al., Algorithms for Validation (MIT Press, 2026)."""
+
 from scipy.stats import norm
 import numpy as np
 import matplotlib.pyplot as plt

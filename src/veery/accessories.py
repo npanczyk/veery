@@ -1,3 +1,6 @@
+"""Specification checks (ψ) and robustness (ρ), following Kochenderfer et al.,
+Algorithms for Validation (MIT Press, 2026), Ch. 3."""
+
 import numpy as np
 
 

@@ -4,7 +4,7 @@ veery is a Python library for **falsifying controllers**, especially reinforceme
 
 In addition to naive sampling, veery provides a targeted search for more likely failures using Monte Carlo Tree Search (MCTS).
 
-The main case study is an RL controller for the Holos-Quad microreactor (adapted from [Tunkle et al., 2025](https://github.com/aims-umich/microdrum-marl)). We include a simpler inverted pendulum example for demonstration purposes. The falsification framework defined in this repo is based on that defined in *Algorithms for Validation* by [Kochenderfer et al.](https://algorithmsbook.com/validation/).
+The main case study is an RL controller for the Holos-Quad microreactor (based on the model from [Tunkle et al., 2025](https://doi.org/10.1016/j.ecmx.2025.101090)). We include a simpler inverted pendulum example for demonstration purposes. The falsification framework defined in this repo is based on that defined in *Algorithms for Validation* by [Kochenderfer et al.](https://algorithmsbook.com/validation/).
 
 > **Status:** early alpha. The API may change between releases.
 
@@ -128,6 +128,12 @@ tests/            # pytest suite
 pytest
 ```
 
+## References
+
+- M. J. Kochenderfer, S. M. Katz, A. L. Corso, and R. J. Moss, *Algorithms for Validation*. MIT Press, 2026. https://algorithmsbook.com/validation/
+- L. Tunkle, K. Abdulraheem, L. Lin, and M. I. Radaideh, "Nuclear microreactor transient and load-following control with deep reinforcement learning," *Energy Conversion and Management: X*, vol. 27, p. 101090, 2025. https://doi.org/10.1016/j.ecmx.2025.101090 (original implementation: https://github.com/aims-umich/microdrum-marl)
+
+If you use veery, please cite it using [`CITATION.cff`](https://github.com/npanczyk/veery/blob/main/CITATION.cff).
 
 ## License
 

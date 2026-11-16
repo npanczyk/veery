@@ -1,5 +1,5 @@
 """
-This code was modified from that created for the following publication:
+Implements the Holos-Quad microreactor model described in:
 
 Leo Tunkle, Kamal Abdulraheem, Linyu Lin, Majdi I. Radaideh,
 Nuclear microreactor transient and load-following control with deep reinforcement learning,
@@ -10,7 +10,7 @@ Volume 27,
 ISSN 2590-1745,
 https://doi.org/10.1016/j.ecmx.2025.101090.
 
-Tunkle et al.'s original codebase available at: https://github.com/aims-umich/microdrum-marl.
+The authors' original implementation is available at: https://github.com/aims-umich/microdrum-marl.
 """
 
 import time
