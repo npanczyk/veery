@@ -1,3 +1,6 @@
+"""Falsification with Monte Carlo tree search, following Kochenderfer et al.,
+Algorithms for Validation (MIT Press, 2026), Ch. 5."""
+
 import numpy as np
 import pandas as pd
 import os
