@@ -6,7 +6,17 @@ In addition to naive sampling, veery provides a targeted search for more likely 
 
 The main case study is an RL controller for the Holos-Quad microreactor (adapted from [Tunkle et al., 2025](https://github.com/aims-umich/microdrum-marl)). We include a simpler inverted pendulum example for demonstration purposes. The falsification framework defined in this repo is based on that defined in *Algorithms for Validation* by [Kochenderfer et al.](https://algorithmsbook.com/validation/).
 
+> **Status:** early alpha. The API may change between releases.
+
 ## Installation
+
+veery requires Python ≥3.12.
+
+```bash
+pip install veery
+```
+
+The example problems in `experiments/` are not part of the package. To run them, clone the [repository](https://github.com/npanczyk/veery) and install from source:
 
 ```bash
 conda env create -f environment.yml   # creates the `veery` env (Python 3.12)
@@ -23,7 +33,7 @@ pip install -e ".[dev,experiments]"
 
 ## Quick start
 
-See `experiments/inverted_pendulum/pendulum_tutorial.ipynb` for a full walkthrough on a simple demo problem. 
+See [`pendulum_tutorial.ipynb`](https://github.com/npanczyk/veery/blob/main/experiments/inverted_pendulum/pendulum_tutorial.ipynb) for a full walkthrough on a simple demo problem.
 
 ## Defining a problem
 
@@ -95,8 +105,8 @@ The node score is the mean rollout robustness (rho) minus λ·log-likelihood of 
 
 ## Examples
 
-- **`experiments/holos/`**: Holos-Quad microreactor. Gym environment (`HolosMulti`), point-kinetics model, power profiles, and SB3 training (`python train.py`). Demo in `holos_tutorial.ipynb`.
-- **`experiments/inverted_pendulum/`**: inverted pendulum with a proportional controller. Demo in `pendulum_tutorial.ipynb`.
+- **[`experiments/holos/`](https://github.com/npanczyk/veery/tree/main/experiments/holos)**: Holos-Quad microreactor. Gym environment (`HolosMulti`), point-kinetics model, power profiles, and SB3 training (`python train.py`). Demo in `holos_tutorial.ipynb`.
+- **[`experiments/inverted_pendulum/`](https://github.com/npanczyk/veery/tree/main/experiments/inverted_pendulum)**: inverted pendulum with a proportional controller. Demo in `pendulum_tutorial.ipynb`.
 
 Experiments should be run from inside their own folder to properly manage imports.
 
