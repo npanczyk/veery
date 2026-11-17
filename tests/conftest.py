@@ -26,7 +26,8 @@ class DummyDisturbanceDistribution:
 
     def logpdf(self, x):
         # mcts only reads the observation (0th) entry, so put the cost of a big xs there; this makes larger disturbances less likely and gives rank_failures something to sort on
-        return (-2.0 - abs(x.xs), 0, 0)
+        # return (-2.0 - abs(x.xs), 0, 0)
+        return (-2.0, 0, -1)
 
 
 @pytest.fixture

@@ -236,13 +236,15 @@ class Node:
         while node is not None:
             node.N += 1
             node.Q += (q - node.Q) / node.N
-            q, node = node.Q, node.parent
+            node = node.parent
         return
 
 
 # post-processing stuff
 def path_logp(node, disturbance_dist):
-    """Gets the loglikelihood of the disturbances along a full path (sum of individual loglikelihoods)
+    """Gets the loglikelihood of the disturbances along a full path (sum of individual loglikelihoods). Does not count the root node!
+
+    Storing depth in here for now so we can normalize the path loglikelihood later. Will need to adjust test_pathlogp in test_mcts.py if this happens.
 
     Args:
         node (Node)
@@ -258,7 +260,7 @@ def path_logp(node, disturbance_dist):
         total += disturbance_dist.logpdf(node.edge[2])[0]
         depth += 1
         node = node.parent
-    return total / depth if depth else 0
+    return total
 
 
 def rank_failures(tree, disturbance_dist):
@@ -280,7 +282,9 @@ def rank_failures(tree, disturbance_dist):
 
 
 def extract_path(node):
-    """Nodes from just below the root down to `node`, in order."""
+    """Nodes from just below the root down to `node`, in order.
+
+    Note: excludes the root node and appears in reverse order (top of tree down)"""
     path = []
     while node.parent is not None:
         path.append(node)
@@ -299,7 +303,7 @@ def save_failures(tree, disturbance_dist, results_path):
         rows.append(
             {
                 "rank": rank,
-                "mean_logpdf": path_logp(n, disturbance_dist),
+                "path_logp": path_logp(n, disturbance_dist),
                 "depth": len(path),
                 "fail_time": n.state["time"],
                 "path_rho": n.path_rho,
@@ -307,8 +311,8 @@ def save_failures(tree, disturbance_dist, results_path):
             }
         )
         sequences[rank] = {
-            "disturbances": [p.edge[2] for p in path],  # Disturbance objects
-            "actions": [p.edge[1] for p in path],
+            "disturbances": [node.edge[2] for node in path],  # Disturbance objects
+            "actions": [node.edge[1] for node in path],
         }
 
     pd.DataFrame(rows).to_csv(f"{results_path}/failures.csv", index=False)

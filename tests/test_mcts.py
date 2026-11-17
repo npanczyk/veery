@@ -21,7 +21,7 @@ def bakery_tree(bakery, dummy_model, failing_disturbance_dist, tmp_path):
     return tree
 
 
-def test_known_failures_not_revisited(
+def test_run_mcts_known_failures_not_revisited(
     bakery, dummy_model, failing_disturbance_dist, tmp_path
 ):
     """MCTS should spend its iterations looking for new failures, not re-selecting ones it already found.
@@ -63,7 +63,7 @@ def demo_tree():
     root = Node(
         state={"time": 0, "runtime": 3},
         parent=None,
-        edge=None,
+        edge=(None, None, 1),
         N=6,
         Q=-10,
         path_rho=np.inf,
@@ -72,7 +72,7 @@ def demo_tree():
     r1c1 = Node(
         state={"time": 1, "runtime": 3},
         parent=root,
-        edge=None,
+        edge=(None, None, 1),
         N=2,
         Q=-5,
         path_rho=1,
@@ -81,7 +81,7 @@ def demo_tree():
     r1c2 = Node(
         state={"time": 1, "runtime": 3},
         parent=root,
-        edge=None,
+        edge=(None, None, 1),
         N=4,
         Q=-7,
         path_rho=1,
@@ -90,7 +90,7 @@ def demo_tree():
     r2c1 = Node(
         state={"time": 2, "runtime": 3},
         parent=r1c1,
-        edge=None,
+        edge=(None, None, 1),
         N=1,
         Q=-3,
         path_rho=-10,
@@ -99,7 +99,7 @@ def demo_tree():
     r2c2 = Node(
         state={"time": 2, "runtime": 3},
         parent=r1c2,
-        edge=None,
+        edge=(None, None, 1),
         N=1,
         Q=-3,
         path_rho=-10,
@@ -108,7 +108,7 @@ def demo_tree():
     r2c3 = Node(
         state={"time": 2, "runtime": 3},
         parent=r1c2,
-        edge=None,
+        edge=(None, None, 1),
         N=1,
         Q=-3,
         path_rho=-10,
@@ -117,7 +117,7 @@ def demo_tree():
     r2c4 = Node(
         state={"time": 2, "runtime": 3},
         parent=r1c2,
-        edge=None,
+        edge=(None, None, 1),
         N=1,
         Q=-3,
         path_rho=-10,
@@ -233,3 +233,77 @@ def test_score(mcts_alg):
     score = mcts_alg.score(snap, Disturbance(0, 0, 0), 1)
     logpdf_of_disturbance = (-2.0, 0, 0)
     assert score == 1 - 0.01 * (-2)
+
+
+def test_node_terminal_and_dead(demo_tree):
+    node = demo_tree["r2c2"]
+    assert node.is_terminal() == True
+    assert node.is_dead(max_children=3) == True
+
+
+def test_node_exhausted_and_dead(demo_tree):
+    node = demo_tree["r1c2"]
+    assert node.is_terminal() == False
+    assert node.is_exhausted(max_children=3) == True
+    assert node.is_dead(max_children=3) == True
+
+
+def test_node_dead_and_exhausted(demo_tree):
+    node = demo_tree["r1c2"]
+    assert node.is_terminal() == False
+    assert node.is_dead(max_children=3) == True
+    assert node.is_exhausted(max_children=3) == True
+
+
+def test_node_extends(mcts_alg):
+    tree = mcts_alg.initialize_tree()
+    node = tree[0]
+    node.extend(mcts_alg, tree)
+    assert len(node.children) > 0
+    child_node = node.children[0]
+    assert child_node.parent is node
+
+
+def test_node_backpropagates(mcts_alg):
+    tree = mcts_alg.initialize_tree()
+    node = tree[0]
+    q0 = node.Q
+    n0 = node.N
+    print(q0, n0)
+    # normally we would extend here, but let's just check backpropagation
+    node.backpropagate(10)
+    assert node.Q == pytest.approx(q0 + float((10 - q0) / (n0 + 1)))
+
+
+def test_path_logp(demo_tree, dummy_disturbance_dist):
+    pathlp = path_logp(demo_tree["r2c1"], dummy_disturbance_dist)
+    expected = -2 + -2  # two steps, don't count the root
+    assert pathlp == expected
+
+
+def test_rank_failures(demo_tree, dummy_disturbance_dist):
+    tree = [n for n in demo_tree.values()]
+    ranked_failures = rank_failures(tree, dummy_disturbance_dist)
+    expected = [
+        demo_tree["r2c1"],
+        demo_tree["r2c2"],
+        demo_tree["r2c3"],
+        demo_tree["r2c4"],
+    ]
+    assert ranked_failures == expected
+
+
+def test_extract_path(demo_tree):
+    # tree = [n for n in demo_tree.values()]
+    node = demo_tree["r2c1"]
+    path = extract_path(node)
+    assert [demo_tree["r1c1"], demo_tree["r2c1"]] == path
+
+
+def test_save_failures(demo_tree, dummy_disturbance_dist):
+    results_path = Path(__file__).parent / "results"
+    results_path.mkdir(exist_ok=True)
+    tree = [n for n in demo_tree.values()]
+    rows = save_failures(tree, dummy_disturbance_dist, results_path)
+    assert len(rows) == 4
+    assert Path(results_path / "failure_sequences.pkl").exists()
