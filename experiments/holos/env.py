@@ -320,18 +320,13 @@ class HolosMulti(gym.Env):
         Returns:
             tuple: actual power over rollout, desired power over rollout
         """
-        observation = self.set_snapshot(snap)
-        actual_power = []
-        desired_power = []
-        done = False
-        while self.time < self.runtime and not done:
-            action, _ = model.predict(observation, deterministic=True)
-            x = disturbance_distribution.sample(state=self.state, action=action)
-            observation, _, terminated, truncated, _ = self.step(action, disturbance=x)
-            actual_power.append(self._p)
-            desired_power.append(float(self.profile(self.time)))
-            done = terminated or truncated
-        return actual_power, desired_power
+        return accessories.rollout_from_snapshot(
+            self,
+            model,
+            snap,
+            disturbance_distribution,
+            get_actual=lambda env: env._p,
+        )
 
     def state_robustness(self, threshold, percent=True):
         """Gets the robustness of the current state

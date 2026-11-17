@@ -101,7 +101,7 @@ class InvertedPendulum:
         Args:
             disturbance (Disturbance): noise value for the step
         Returns:
-            observation, truncated, None, None, None: matching SB3 output format for compatibility with MCTS
+            observation, None, terminated, truncated, None: matching gymnasium output format for compatibility with MCTS
         """
         # fuzz the action
         action = action + disturbance.xa["torque"]
@@ -130,7 +130,7 @@ class InvertedPendulum:
         truncated = False
         if self.time > self.runtime:
             truncated = True
-        return observation, truncated, None, None, None
+        return observation, None, False, truncated, None
 
     def get_snapshot(self):
         return {
@@ -150,18 +150,13 @@ class InvertedPendulum:
         return {k: v.copy() for k, v in snap["observation"].items()}
 
     def rollout_from_snapshot(self, model, snap, disturbance_distribution):
-        observation = self.set_snapshot(snap)
-        actual_theta = []
-        desired_theta = []
-        done = False
-        while self.time < self.runtime and not done:
-            action, _ = model.predict(observation)
-            x = disturbance_distribution.sample()
-            observation, truncated, _, _, _ = self.step(action=action, disturbance=x)
-            actual_theta.append(self.state["theta"])
-            desired_theta.append(self.profile(self.time))
-            done = truncated
-        return actual_theta, desired_theta
+        return accessories.rollout_from_snapshot(
+            self,
+            model,
+            snap,
+            disturbance_distribution,
+            get_actual=lambda env: env.state["theta"],
+        )
 
     def state_robustness(self, threshold, percent=True):
         return accessories.robustness(
@@ -186,8 +181,10 @@ class InvertedPendulum:
         while not done:
             action, _ = model.predict(observation)
             x = disturbance_distribution.sample()
-            observation, truncated, _, _, _ = self.step(action=action, disturbance=x)
-            done = truncated
+            observation, _, terminated, truncated, _ = self.step(
+                action=action, disturbance=x
+            )
+            done = terminated or truncated
         if save:
             self.render(save=True)
 
@@ -209,27 +206,3 @@ class InvertedPendulum:
             results[i] = psi(history, threshold=np.pi / 4)
 
         return histories, results
-
-
-if __name__ == "__main__":
-    n_rollouts = 300
-    sig = 0.15
-    disturbance_dist = DisturbanceDistribution(
-        Do=norm(0, sig), Da=norm(0, 0), Ds=norm(0, 0)
-    )
-    pendulum = InvertedPendulum(m=1.0, l=1.0, dt=0.05)
-    runtime = 10  # length of rollout in seconds
-    timesteps = int(
-        np.ceil(runtime / pendulum.dt)
-    )  # this formula has edge cases, may need to change later to linspace in rollouts method
-    successes = np.zeros(n_rollouts)
-    theta_matrix = np.zeros((timesteps, n_rollouts))
-
-    for r in range(n_rollouts):
-        thetas, omegas, xs = pendulum.rollout(runtime, disturbance_dist)
-        theta_matrix[:, r] = thetas
-        successes[r] = pendulum.check_spec(thetas)
-
-    plot_observation_disturbances(xs, sigma=sig)
-    plot_trajectories(theta_matrix, sigma=sig)
-    print(f"Success Rate: {successes.sum()/n_rollouts}")

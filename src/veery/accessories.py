@@ -46,3 +46,29 @@ def robustness(actual, desired, threshold, percent=True):
         diffs = diffs / np.array(desired)
     rho = np.min(threshold - diffs)
     return rho
+
+
+def rollout_from_snapshot(env, model, snap, disturbance_distribution, get_actual):
+    """Runs a rollout of a model from a snapshot until the episode ends. Environments can call this from their own rollout_from_snapshot method, which MCTS uses to score nodes.
+
+    Args:
+        env (object): environment implementing set_snapshot, step (gymnasium-style return), profile, state, time, and runtime
+        model (object): model with an SB3-style predict(observation, deterministic) method
+        snap (dict): snapshot of the environment state from env.get_snapshot()
+        disturbance_distribution (DisturbanceDistribution): sampled once per step
+        get_actual (function): takes env and returns the actual output at the current state, compared against env.profile(env.time)
+    Returns:
+        tuple: actual output over rollout, desired output over rollout
+    """
+    observation = env.set_snapshot(snap)
+    actual = []
+    desired = []
+    done = False
+    while env.time < env.runtime and not done:
+        action, _ = model.predict(observation, deterministic=True)
+        x = disturbance_distribution.sample(state=env.state, action=action)
+        observation, _, terminated, truncated, _ = env.step(action=action, disturbance=x)
+        actual.append(get_actual(env))
+        desired.append(float(env.profile(env.time)))
+        done = terminated or truncated
+    return actual, desired
