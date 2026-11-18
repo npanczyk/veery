@@ -38,8 +38,17 @@ class Undisturbed(gym.Wrapper):
 
     ZERO_DISTURBANCE = fuzzing.Disturbance(
         xo={"dp": 0, "p": 0, "drum_angles": np.zeros(8)},
-        xa=np.zeros(8),
-        xs=np.zeros(12),
+        xa={"dtheta": np.zeros(8)},
+        # keys must match STATE_ORDER in HolosMulti.step()
+        xs={
+            "nr": 0,
+            "precursors": np.zeros(6),
+            "Tf": 0,
+            "Tm": 0,
+            "Tc": 0,
+            "xe": 0,
+            "i": 0,
+        },
     )
 
     def step(self, action):
@@ -256,22 +265,31 @@ class HolosMulti(gym.Env):
             {},
         )  # return empty dict for info
 
-    def calc_reward(self, current_power, desired_power):
+    def calc_reward(self, current_power, desired_power, margin=2):
         """Returns reward and whether the episode is terminated."""
-        # First component: give reward to stay in the correct range
-        # diff used to be 100 * abs(current - desired), but since we changed from SPU to fractional power, we increased this by a factor of 100
-        diff = 1e4 * abs(current_power - desired_power)
-        # offset so reward is >= 0 for every non-terminating step (diff <= 5);
-        # otherwise early termination can beat surviving with negative reward
-        reward = 5 - diff
+        # Define a penalty based on how close to the desired power the RL gets
+        # Bigger difference means bigger penalty
+        error = abs(current_power - desired_power)
+        power_reward = 5 * np.exp(-abs(error) / 2e-3)
+        # Define a boundary penalty if the RL gets too close to the end range. Default value is set by margin, which is 2 degrees. Penalty increases quadratically as the drum angle approaches 0 or 180 (either end range). Max penalty of 0.125 so that if all 8 drums are maxxed out, the penalty is 1.
+        boundary_penalty = 0
+        # Iterate over drum angles
+        for d in self._drum_angles:
+            # Define x as the distance to either boundary, based on whether 0 or 180 is closer
+            x = min(d, 180 - d)
+            # If x is within the margin zone, get the penalty value based on quadratic equation. Closer to 0, higher penalty. Denominator normalizes to 0.125 penalty at 0. If drums go beyond limits, the boundary penalty will make the reward negative and the RL will probably terminate the run.
+            # TO-DO: add a way to track this!
+            if x < margin:
+                penalty = (x - margin) ** 2 / ((margin**2) * 8)
+                boundary_penalty += penalty
 
-        # punish the model for going too far off profile if in train mode
+        # boundary penalty maxes out at 1 if all drums are at limits
+        # otherwise early termination can beat surviving with negative reward
+        reward = power_reward + (1 - boundary_penalty)
         terminated = False
-        # ADD GRADIENT PENALTY TO EDGE CASES?
-        # TO-DO
-        if self.training and (
-            diff > 5 or self._drum_angles.min() <= 0 or self._drum_angles.max() >= 180
-        ):
+
+        # if the error is greater than 1%, terminate the run because we don't want it learning that behavior (3% is our actual spec, but tightening this for safety margin)
+        if self.training and (error > 0.01):
             reward -= 100
             terminated = True
 

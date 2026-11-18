@@ -118,7 +118,7 @@ def train(
 if __name__ == "__main__":
     # train a model
     train(
-        model_name="default",
+        model_name="exp_reward",
         env_type=env.HolosMulti,
         training_profile="train",
         episode_length=200,  # N time steps
