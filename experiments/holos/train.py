@@ -124,7 +124,7 @@ if __name__ == "__main__":
         episode_length=200,  # N time steps
         dt=1,  # seconds in a single time step
         total_timesteps=int(
-            600
+            100
         ),  # the number of timesteps across parallel envs that training will explore for
         n_envs=10,
     )
