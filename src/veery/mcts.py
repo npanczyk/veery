@@ -129,9 +129,9 @@ class MCTS:
 
         avg_rho = np.mean(np.array(rho_list))
 
-        # get the loglikelihood of the observation disturbance only! not including action or state disturbances now
-        obs_ll = self.disturbance_dist.logpdf(x)[0]
-        return avg_rho - self.lam * obs_ll
+        # loglikelihood of the disturbance, summed over all three components (xo, xa, xs)
+        ll = np.sum(self.disturbance_dist.logpdf(x))
+        return avg_rho - self.lam * ll
 
 
 class Node:
@@ -256,8 +256,8 @@ def path_logp(node, disturbance_dist):
     total = 0.0
     depth = 0
     while node.parent is not None:
-        # index 0th position to get logpdf of the observation only!
-        total += disturbance_dist.logpdf(node.edge[2])[0]
+        # sum over all three components (xo, xa, xs)
+        total += np.sum(disturbance_dist.logpdf(node.edge[2]))
         depth += 1
         node = node.parent
     return total

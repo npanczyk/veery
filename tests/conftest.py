@@ -25,8 +25,7 @@ class DummyDisturbanceDistribution:
         return Disturbance(0.1, 0, next(self.xs_values))
 
     def logpdf(self, x):
-        # mcts only reads the observation (0th) entry, so put the cost of a big xs there; this makes larger disturbances less likely and gives rank_failures something to sort on
-        # return (-2.0 - abs(x.xs), 0, 0)
+        # mcts and direct_falsify sum all three entries, so each step costs -3
         return (-2.0, 0, -1)
 
 

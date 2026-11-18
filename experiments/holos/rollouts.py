@@ -1,12 +1,13 @@
 import numpy as np
 from pathlib import Path
 import stable_baselines3 as sb3
-from veery.accessories import check_spec
+from veery.direct_falsification import direct_falsify
 import env
 import profiles
 import numpy as np
 from veery import viz
 from veery import fuzzing
+import disturbances
 from tqdm import tqdm
 import helpers
 
@@ -51,15 +52,15 @@ def rollout(
         return test_env.render(save=False)
 
 
-def run_rollouts(test_profile, model_name, run_name, m, p_sig=0.01, psi=check_spec):
-    """Runs m rollouts, save the trajectories and check spec compliance.
+def run_rollouts(test_profile, model_name, run_name, m, p_sig=0.01, threshold=0.03):
+    """Runs m rollouts with direct falsification, saves the trajectories and checks spec compliance.
 
     Args:
         test_profile (): from profiles
         model_name (str): model name inside /models folder
         run_name (str): name of folder inside /results to save the results
         m (int): number of rollouts
-        psi (callable): spec-check function taking a history DataFrame, returns bool
+        threshold (float): fractional deviation from desired power allowed by the spec
 
     Returns:
         histories (list[pd.DataFrame]), results (np.ndarray[bool]): trajectories and pass/fail per rollout
@@ -73,30 +74,28 @@ def run_rollouts(test_profile, model_name, run_name, m, p_sig=0.01, psi=check_sp
 
     # set up disturbance distribution for the test
     disturbance_dist = fuzzing.DisturbanceDistribution(
-        Do=fuzzing.Do(sigma_p=p_sig, sigma_drum=0.005),
-        Da=fuzzing.Da(sigma_dtheta=0),
-        Ds=fuzzing.Ds(),
+        Do=disturbances.Do(sigma_p=p_sig, sigma_drum=0.005),
+        Da=disturbances.Da(sigma_dtheta=0),
+        Ds=disturbances.Ds(),
     )
 
-    histories = []
-    results = np.zeros(m, dtype=bool)
     model = helpers.load_trained_model(model_name)
+    test_env = env.HolosMulti(**testing_kwargs, save_dir=results_folder)
 
-    for i in tqdm(range(m)):
-        history = rollout(
-            model=model,
-            env_type=env.HolosMulti,
-            env_kwargs=testing_kwargs,
-            disturbance_distribution=disturbance_dist,
-            results_folder=results_folder,
-            save_histories=False,
-        )
-        histories.append(history)
-        results[i] = psi(history)
+    out = direct_falsify(
+        environment=test_env,
+        model=model,
+        disturbance_dist=disturbance_dist,
+        m=m,
+        threshold=threshold,
+        get_history=lambda e: e.render(save=False),
+    )
+    histories = out["histories"]
+    results = ~out["failed"]  # True where the rollout passed
 
     viz.plot_rollouts(histories, results, save_dir=plots_folder)
     viz.plot_robustness(
-        history, threshold=0.03, time=None, ax=None, save_dir=plots_folder
+        histories[-1], threshold=threshold, time=None, ax=None, save_dir=plots_folder
     )
 
     return histories, results

@@ -344,8 +344,8 @@ def plot_robustness(history, threshold=0.03, time=None, ax=None, save_dir=None):
     t = history.index if time is None else time
 
     rho_gen = robustness(
-        p_actual=history["Actual"],
-        p_desired=history["Desired"],
+        actual=list(history["Actual"]),
+        desired=list(history["Desired"]),
         threshold=threshold,
     )
 

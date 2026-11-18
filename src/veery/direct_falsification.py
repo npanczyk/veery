@@ -1,15 +1,78 @@
+"""Direct falsification (naive sampling), following Kochenderfer et al.,
+Algorithms for Validation (MIT Press, 2026), Ch. 4."""
 
-def direct_falsify(rollout, psi, system, timesteps, m):
-    """Performs direct falsification. Not yet implemented.
+import numpy as np
+from tqdm import tqdm
+
+
+def direct_falsify(
+    environment,
+    model,
+    disturbance_dist,
+    m,
+    threshold,
+    percent=True,
+    get_history=None,
+):
+    """Runs m rollouts with disturbances sampled from the nominal distribution and checks each against the specification. A rollout ends at the first step that violates the specification.
 
     Args:
-        rollout (func): Function that runs one rollout and yields a trajectory
-        psi (func): Function which returns a bool depending on if a trajectory met a specification
-        system (obj): Object containing the agent, environment, and sensor models
-        timesteps (int): Number of timesteps in each rollout
-        m (int): Number of rollouts
+        environment (object): environment implementing reset, get_snapshot, step, and state_robustness (same interface MCTS uses)
+        model (object): model with an SB3-style predict(observation, deterministic) method
+        disturbance_dist (DisturbanceDistribution): sampled once per step
+        m (int): number of rollouts
+        threshold (float): specification as a deviation from the profile
+        percent (bool, optional): True if threshold is a fractional deviation from the profile, False for a flat deviation. Defaults to True.
+        get_history (function, optional): takes the environment after each rollout and returns what to keep as that rollout's history (e.g. lambda env: env.render(save=False)). Defaults to None, which keeps no histories.
 
     Returns:
-        NumPy array: array of bools showing which trajectories failed
+        dict:
+            "failed" (np.ndarray[bool]): True where the rollout violated the specification
+            "robustness" (np.ndarray[float]): minimum robustness over each rollout (for failures, the robustness at the failing step)
+            "loglikelihoods" (np.ndarray[float]): log-likelihood of each rollout's disturbances, up to and including the failing step
+            "disturbances" (list[list[Disturbance]]): disturbances sampled at each step of each rollout
+            "histories" (list): output of get_history for each rollout, or None
+            "p_fail" (float): estimated probability of failure
+            "std_err" (float): standard error of p_fail
     """
-    raise NotImplementedError("direct_falsify is not yet implemented")
+    rhos = np.zeros(m)
+    loglikelihoods = np.zeros(m)
+    disturbances = []
+    histories = [] if get_history is not None else None
+
+    for i in tqdm(range(m)):
+        environment.reset()
+        observation = environment.get_snapshot()["observation"]
+        xs = []
+        rho = np.inf
+        done = False
+        # stop at the first failure, so the loglikelihood only counts the path up to it (same as path_logp in MCTS)
+        while environment.time < environment.runtime and not done and rho > 0:
+            action, _ = model.predict(observation, deterministic=True)
+            x = disturbance_dist.sample(state=environment.state, action=action)
+            observation, _, terminated, truncated, _ = environment.step(
+                action=action, disturbance=x
+            )
+            xs.append(x)
+            rho = min(rho, environment.state_robustness(threshold, percent=percent))
+            done = terminated or truncated
+
+        rhos[i] = rho
+        # sum over all three components (xo, xa, xs) and every step
+        loglikelihoods[i] = sum(np.sum(disturbance_dist.logpdf(x)) for x in xs)
+        disturbances.append(xs)
+        if get_history is not None:
+            histories.append(get_history(environment))
+
+    # a rollout fails if its robustness is not positive, the same as check_spec
+    passed = rhos > 0
+    failed = rhos <= 0
+    prob_fail = failed.mean()
+    return {
+        "passed": passed,
+        "robustness": rhos,
+        "loglikelihoods": loglikelihoods,
+        "disturbances": disturbances,
+        "histories": histories,
+        "std_err": float(np.sqrt(prob_fail * (1 - prob_fail) / m)),
+    }

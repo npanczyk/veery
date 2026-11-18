@@ -231,8 +231,8 @@ def test_score(mcts_alg):
     tree = mcts_alg.initialize_tree()
     snap = mcts_alg.environment.get_snapshot()
     score = mcts_alg.score(snap, Disturbance(0, 0, 0), 1)
-    logpdf_of_disturbance = (-2.0, 0, 0)
-    assert score == 1 - 0.01 * (-2)
+    logpdf_of_disturbance = (-2.0, 0, -1)  # summed over all three components
+    assert score == pytest.approx(1 - 0.01 * (-3))
 
 
 def test_node_terminal_and_dead(demo_tree):
@@ -277,7 +277,7 @@ def test_node_backpropagates(mcts_alg):
 
 def test_path_logp(demo_tree, dummy_disturbance_dist):
     pathlp = path_logp(demo_tree["r2c1"], dummy_disturbance_dist)
-    expected = -2 + -2  # two steps, don't count the root
+    expected = -3 + -3  # two steps, don't count the root
     assert pathlp == expected
 
 
