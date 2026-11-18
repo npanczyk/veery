@@ -261,10 +261,14 @@ class HolosMulti(gym.Env):
         # First component: give reward to stay in the correct range
         # diff used to be 100 * abs(current - desired), but since we changed from SPU to fractional power, we increased this by a factor of 100
         diff = 1e4 * abs(current_power - desired_power)
-        reward = 2 - diff
+        # offset so reward is >= 0 for every non-terminating step (diff <= 5);
+        # otherwise early termination can beat surviving with negative reward
+        reward = 5 - diff
 
-        # give a punish outside bounds if in train mode
+        # punish the model for going too far off profile if in train mode
         terminated = False
+        # ADD GRADIENT PENALTY TO EDGE CASES?
+        # TO-DO
         if self.training and (
             diff > 5 or self._drum_angles.min() <= 0 or self._drum_angles.max() >= 180
         ):

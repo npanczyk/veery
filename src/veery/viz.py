@@ -20,12 +20,13 @@ def plot_rollouts(histories, results, save_dir=None, ylabel="Actual Value"):
 
     for history, passed in zip(histories, results):
         color = "green" if passed else "red"
+        linewidth = 0.8 if passed else 1.5
         ax.plot(
             history["Time"],
             history["Actual"],
             color=color,
             alpha=0.5,
-            linewidth=0.8,
+            linewidth=linewidth,
         )
 
     ax.set_xlabel("Time, [s]")
