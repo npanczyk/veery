@@ -46,11 +46,15 @@ class InvertedPendulum:
         self.a_max = 2.0  # maximum applicable torque
         # define a constant profile so that we can calculate robustness
         self.profile = lambda t: 0
+        self.rng = np.random.default_rng()  # unseeded until reset(seed=...)
 
-    def reset(self):
+    def reset(self, seed=None):
+        # reseed only when given a seed; otherwise continue the current random stream (gym convention)
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
         self.time = 0
-        theta0 = np.random.uniform(-np.pi / 16, np.pi / 16)
-        w0 = np.random.uniform(-1.0, 1.0)
+        theta0 = self.rng.uniform(-np.pi / 16, np.pi / 16)
+        w0 = self.rng.uniform(-1.0, 1.0)
         # np.float64 keeps .item()/.copy() working on observations (as when state was an array)
         self.state = {
             "theta": np.float64(theta0),

@@ -183,9 +183,10 @@ class HolosMulti(gym.Env):
 
     def mask_drums(self):
         valid_maskings = tuple(range(self.max_failed_drums + 1))
-        num_masks = np.random.choice(valid_maskings)
+        # use the env's own generator so reset(seed=...) makes drum failures reproducible
+        num_masks = self.np_random.choice(valid_maskings)
         self.masks = np.ones(8)
-        mask_indices = np.random.choice(8, size=num_masks, replace=False)
+        mask_indices = self.np_random.choice(8, size=num_masks, replace=False)
         self.masks[mask_indices] = 0
         return
 

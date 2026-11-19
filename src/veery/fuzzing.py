@@ -11,11 +11,12 @@ class ZeroDist:
     def __init__(self):
         return
 
-    def rvs(self, size=None):
+    def rvs(self, size=None, random_state=None):
         """Samples from a "zero distribution" (deterministic)
 
         Args:
             size (int, optional): Number of samples to be drawn. Defaults to None.
+            random_state (np.random.Generator, optional): Unused, just needed to match the scipy.stats interface. Defaults to None.
 
         Returns:
             Numpy array or float: Random samples
@@ -67,15 +68,18 @@ class ComponentDistribution:
     def __init__(self, variables_dict):
         self.variables = variables_dict  # dictionary of the form: {name: variable, name: variable, etc.}
 
-    def sample(self, *dependencies):
+    def sample(self, *dependencies, rng=None):
         """Gets randomly generated samples for a disturbance distribution.
-        Note: dependencies are state/action/observation information that can be overriden by a subclass-specific sample() method
+        Note: dependencies are state/action/observation information that can be overriden by a subclass-specific sample() method. Overrides must also accept the rng keyword.
+
+        Args:
+            rng (np.random.Generator, optional): Random number generator to draw samples from. Defaults to None, which uses numpy's global random state.
 
         Returns:
             dict: keys are the names of the variables, values are the samples
         """
         return {
-            name: var.distribution.rvs(size=var.size)
+            name: var.distribution.rvs(size=var.size, random_state=rng)
             for name, var in self.variables.items()
         }
 
@@ -108,20 +112,32 @@ class Disturbance:
 
 
 class DisturbanceDistribution:
-    def __init__(self, Do, Da, Ds):
+    def __init__(self, Do, Da, Ds, seed=None):
         """
         Args:
             Do (class): Observation (sensor) disturbance distribution. Must be a class that has a sample() method that returns a dictionary with disturbed quantities (str) as keys and disturbance value (float) as values and a logpdf() method that returns a float.
             Da (class): Agent disturbance distribution. Must be a class that has a sample() method that returns a dictionary with disturbed quantities as keys (str) and disturbance value (float) as values and a logpdf() method that returns a float.
             Ds (class): State (environment) distribution. Must be a class that has a sample() method that returns a dictionary with disturbed quantities as keys (str) and disturbance value (float) as values and a logpdf() method that returns a float.
+            seed (int, optional): Seed for the random number generator shared by Do, Da, and Ds. Defaults to None, which gives different samples every run.
         """
         self.Do = Do
         self.Da = Da
         self.Ds = Ds
+        self.seed(seed)
+
+    def seed(self, seed=None):
+        """(Re)starts the random number generator, so the same seed gives the same sequence of disturbances.
+
+        Args:
+            seed (int, optional): Random seed. Defaults to None, which seeds from fresh OS entropy.
+        """
+        self.rng = np.random.default_rng(seed)
 
     def sample(self, state=None, action=None):
         return Disturbance(
-            self.Do.sample(state), self.Da.sample(action), self.Ds.sample(state, action)
+            self.Do.sample(state, rng=self.rng),
+            self.Da.sample(action, rng=self.rng),
+            self.Ds.sample(state, action, rng=self.rng),
         )
 
     def logpdf(self, x):
@@ -140,7 +156,10 @@ class DisturbanceDistribution:
         fig, ax = plt.subplots()
         # ravel so vector variables (e.g. 8 drum angles) are pooled into one histogram
         samples = np.concatenate(
-            [np.ravel(dist_type.sample()[variable]) for i in range(n_samples)]
+            [
+                np.ravel(dist_type.sample(rng=self.rng)[variable])
+                for i in range(n_samples)
+            ]
         )
         ax.hist(samples, 100)
         ax.set_xlabel(f"{variable} disturbance")

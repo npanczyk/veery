@@ -13,6 +13,7 @@ def direct_falsify(
     threshold,
     percent=True,
     get_history=None,
+    seed=None,
 ):
     """Runs m rollouts with disturbances sampled from the nominal distribution and checks each against the specification. A rollout ends at the first step that violates the specification.
 
@@ -24,6 +25,7 @@ def direct_falsify(
         threshold (float): specification as a deviation from the profile
         percent (bool, optional): True if threshold is a fractional deviation from the profile, False for a flat deviation. Defaults to True.
         get_history (function, optional): takes the environment after each rollout and returns what to keep as that rollout's history (e.g. lambda env: env.render(save=False)). Defaults to None, which keeps no histories.
+        seed (int, optional): seeds the disturbance distribution and the environment's first reset (environment.reset(seed=seed)), so the same seed gives the same m rollouts. Defaults to None, which leaves both unseeded.
 
     Returns:
         dict:
@@ -40,8 +42,15 @@ def direct_falsify(
     disturbances = []
     histories = [] if get_history is not None else None
 
+    if seed is not None:
+        disturbance_dist.seed(seed)
+
     for i in tqdm(range(m)):
-        environment.reset()
+        # seed only the first reset; later resets continue the environment's random stream (gym convention)
+        if seed is not None and i == 0:
+            environment.reset(seed=seed)
+        else:
+            environment.reset()
         observation = environment.get_snapshot()["observation"]
         xs = []
         rho = np.inf

@@ -73,9 +73,12 @@ class MCTS:
         self.threshold = threshold  # specification threshold
         self.percent = percent  # whether threshold is a fractional or flat deviation
 
-    def initialize_tree(self):
+    def initialize_tree(self, seed=None):
         # reset the environment
-        self.environment.reset()
+        if seed is not None:
+            self.environment.reset(seed=seed)
+        else:
+            self.environment.reset()
         initial_state = self.environment.get_snapshot()
         return [Node(state=initial_state, N=1)]
 
@@ -331,6 +334,7 @@ def run_MCTS(
     iterations=100,
     hyperparams=None,
     percent=True,
+    seed=None,
 ):
     """Runs Monte Carlo Tree Search for number of defined iterations.
 
@@ -343,6 +347,7 @@ def run_MCTS(
         iterations (int, optional): Number of MCTS iterations (k_max). Defaults to 100.
         hyperparams (dict, optional): MCTS hyperparameters with keys "c", "k", "alpha", and "lambda". Defaults to None, which uses c=0.5, k=1, alpha=0.25, lambda=0.01.
         percent (bool, optional): True if threshold is a fractional deviation from the profile, False if it is a flat deviation. Defaults to True.
+        seed (int, optional): Seeds the disturbance distribution and the environment reset (environment.reset(seed=seed)), so the same seed gives the same tree. Defaults to None, which leaves both unseeded.
 
     Returns:
         list: All nodes in the search tree, with the root at index 0
@@ -374,7 +379,9 @@ def run_MCTS(
         percent=percent,
     )
 
-    tree = alg.initialize_tree()
+    if seed is not None:
+        disturbance_dist.seed(seed)
+    tree = alg.initialize_tree(seed=seed)
 
     for i in tqdm(range(alg.k_max)):
         if tree[0].is_dead(alg.max_children):

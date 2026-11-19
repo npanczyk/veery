@@ -79,6 +79,22 @@ def test_DisturbanceDistribution(Do, Da, Ds):
     assert type(D.logpdf(x)) == tuple
 
 
+def test_DisturbanceDistribution_seed(Do, Da, Ds):
+    # same seed gives the same disturbances, and reseeding restarts the sequence
+    D1 = DisturbanceDistribution(Do, Da, Ds, seed=0)
+    D2 = DisturbanceDistribution(Do, Da, Ds, seed=0)
+    first = [D1.sample().xo["angles"] for i in range(3)]
+    assert all(np.array_equal(a, D2.sample().xo["angles"]) for a in first)
+    D1.seed(0)
+    assert np.array_equal(D1.sample().xo["angles"], first[0])
+
+
+def test_DisturbanceDistribution_different_seeds(Do, Da, Ds):
+    D1 = DisturbanceDistribution(Do, Da, Ds, seed=0)
+    D2 = DisturbanceDistribution(Do, Da, Ds, seed=1)
+    assert not np.array_equal(D1.sample().xo["angles"], D2.sample().xo["angles"])
+
+
 @pytest.fixture(scope="session")
 def save_path(tmp_path_factory):
     path = tmp_path_factory.mktemp("results")
