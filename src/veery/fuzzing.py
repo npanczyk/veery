@@ -26,6 +26,9 @@ class ZeroDist:
         else:
             return 0.0
 
+    def to_dict(self):
+        return {"distribution": "zero"}
+
     def logpdf(self, x):
         """Gets the loglikelihood given a sample and returns 0 for deterministic runs.
 
@@ -54,12 +57,38 @@ def gaussian(sigma, mean=0):
         return norm(mean, sigma)
 
 
+def describe_distribution(dist):
+    """Describes a distribution as a JSON-friendly dictionary, for saving run configs.
+
+    Args:
+        dist (distribution object): ZeroDist, a frozen scipy.stats distribution, or any object with a to_dict() method
+
+    Returns:
+        dict: name of the distribution and its parameters
+    """
+    if hasattr(dist, "to_dict"):
+        return dist.to_dict()
+    # frozen scipy.stats distributions keep the generator (dist.dist) and the arguments they were frozen with
+    if hasattr(dist, "dist") and hasattr(dist, "args"):
+        return {
+            "distribution": dist.dist.name,
+            "args": list(dist.args),
+            "kwds": dict(dist.kwds),
+            "mean": float(dist.mean()),
+            "std": float(dist.std()),
+        }
+    return {"distribution": repr(dist)}
+
+
 class DisturbedVariable:
     """Sets the template for a disturbance variable that contains that variable's distribution (gaussian, uniform, etc.) and its size"""
 
     def __init__(self, distribution, size=None):
         self.distribution = distribution
         self.size = size
+
+    def to_dict(self):
+        return {**describe_distribution(self.distribution), "size": self.size}
 
 
 class ComponentDistribution:
@@ -81,6 +110,19 @@ class ComponentDistribution:
         return {
             name: var.distribution.rvs(size=var.size, random_state=rng)
             for name, var in self.variables.items()
+        }
+
+    def to_dict(self):
+        """Describes every variable's distribution, for saving run configs.
+
+        Returns:
+            dict: class name of the component and a dictionary of its variables
+        """
+        return {
+            "class": type(self).__name__,
+            "variables": {
+                name: var.to_dict() for name, var in self.variables.items()
+            },
         }
 
     def logpdf(self, x):
@@ -132,6 +174,17 @@ class DisturbanceDistribution:
             seed (int, optional): Random seed. Defaults to None, which seeds from fresh OS entropy.
         """
         self.rng = np.random.default_rng(seed)
+
+    def to_dict(self):
+        """Describes the Do, Da, and Ds distributions, for saving run configs.
+
+        Returns:
+            dict: keys are "Do", "Da", and "Ds"
+        """
+        return {
+            name: describe_distribution(component)
+            for name, component in [("Do", self.Do), ("Da", self.Da), ("Ds", self.Ds)]
+        }
 
     def sample(self, state=None, action=None):
         return Disturbance(

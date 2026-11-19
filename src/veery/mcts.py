@@ -4,9 +4,11 @@ Algorithms for Validation (MIT Press, 2026), Ch. 5."""
 import numpy as np
 import pandas as pd
 import os
+import json
 import pickle
+from datetime import datetime
 from veery.accessories import robustness
-from veery.fuzzing import Disturbance, DisturbanceDistribution
+from veery.fuzzing import Disturbance, DisturbanceDistribution, describe_distribution
 from veery.viz import plot_tree, plot_tree_structure
 from tqdm import tqdm
 from pathlib import Path
@@ -325,6 +327,74 @@ def save_failures(tree, disturbance_dist, results_path):
     return rows
 
 
+def save_config(
+    results_path,
+    environment,
+    model,
+    disturbance_dist,
+    threshold,
+    iterations,
+    hyperparams,
+    percent,
+    seed,
+    model_name=None,
+    extra_config=None,
+):
+    """Saves the settings for an MCTS run to config.json in results_path.
+
+    Args:
+        results_path (str): Folder where config.json is saved
+        environment (object): Problem environment. Episode length, runtime, dt, and profile breakpoints are recorded when the environment has them.
+        model (object): Controller. Its class name is recorded if model_name is not given.
+        disturbance_dist (DisturbanceDistribution): Distribution that disturbances are sampled from
+        threshold (float): Specification threshold
+        iterations (int): Number of MCTS iterations (k_max)
+        hyperparams (dict): MCTS hyperparameters
+        percent (bool): True if threshold is a fractional deviation from the profile
+        seed (int): Random seed for the run
+        model_name (str, optional): Name of the model, e.g. the folder it was loaded from. Defaults to None, which uses the model's class name.
+        extra_config (dict, optional): Any other run information to record (e.g. a profile name). Defaults to None.
+
+    Returns:
+        dict: the saved config
+    """
+    environment_config = {"name": type(environment).__name__}
+    for attr in ["episode_length", "runtime", "dt"]:
+        if hasattr(environment, attr):
+            environment_config[attr] = getattr(environment, attr)
+    # interpolated profiles (e.g. scipy's interp1d) keep their breakpoints in x and y
+    profile = getattr(environment, "profile", None)
+    if hasattr(profile, "x") and hasattr(profile, "y"):
+        environment_config["profile"] = {
+            "times": list(profile.x),
+            "values": list(profile.y),
+        }
+
+    config = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "model": model_name if model_name is not None else type(model).__name__,
+        "environment": environment_config,
+        "threshold": threshold,
+        "percent": percent,
+        "iterations": iterations,
+        "seed": seed,
+        "hyperparams": hyperparams,
+        "disturbance_dist": describe_distribution(disturbance_dist),
+    }
+    if extra_config is not None:
+        config.update(extra_config)
+
+    with open(f"{results_path}/config.json", "w") as f:
+        # numpy scalars and arrays aren't JSON serializable, so convert them to python types
+        json.dump(
+            config,
+            f,
+            indent=4,
+            default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o),
+        )
+    return config
+
+
 def run_MCTS(
     environment,
     model,
@@ -335,6 +405,8 @@ def run_MCTS(
     hyperparams=None,
     percent=True,
     seed=None,
+    model_name=None,
+    extra_config=None,
 ):
     """Runs Monte Carlo Tree Search for number of defined iterations.
 
@@ -348,6 +420,8 @@ def run_MCTS(
         hyperparams (dict, optional): MCTS hyperparameters with keys "c", "k", "alpha", and "lambda". Defaults to None, which uses c=0.5, k=1, alpha=0.25, lambda=0.01.
         percent (bool, optional): True if threshold is a fractional deviation from the profile, False if it is a flat deviation. Defaults to True.
         seed (int, optional): Seeds the disturbance distribution and the environment reset (environment.reset(seed=seed)), so the same seed gives the same tree. Defaults to None, which leaves both unseeded.
+        model_name (str, optional): Name of the model recorded in config.json. Defaults to None, which uses the model's class name.
+        extra_config (dict, optional): Any other run information to record in config.json (e.g. {"profile": "test"}). Defaults to None.
 
     Returns:
         list: All nodes in the search tree, with the root at index 0
@@ -377,6 +451,21 @@ def run_MCTS(
         model=model,
         threshold=threshold,  # error tolerance for determining failures
         percent=percent,
+    )
+
+    # save the run settings before searching, so they're there even if the run crashes
+    save_config(
+        results_path=results_path,
+        environment=environment,
+        model=model,
+        disturbance_dist=disturbance_dist,
+        threshold=threshold,
+        iterations=iterations,
+        hyperparams=hyperparams,
+        percent=percent,
+        seed=seed,
+        model_name=model_name,
+        extra_config=extra_config,
     )
 
     if seed is not None:

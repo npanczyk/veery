@@ -52,6 +52,31 @@ def test_run_mcts_known_failures_not_revisited(
     assert repeat_visits == 0  # we should never revisit terminal nodes
 
 
+def test_run_mcts_saves_config(bakery, dummy_model, dummy_disturbance_dist, tmp_path):
+    import json
+
+    run_MCTS(
+        environment=bakery,
+        model=dummy_model,
+        disturbance_dist=dummy_disturbance_dist,
+        results_path=tmp_path,
+        threshold=0.5,
+        iterations=5,
+        percent=False,
+        model_name="baker",
+        extra_config={"profile": "one cake per hour"},
+    )
+    with open(tmp_path / "config.json") as f:
+        config = json.load(f)
+    assert config["model"] == "baker"
+    assert config["environment"]["name"] == "Bakery"
+    assert config["environment"]["runtime"] == 5
+    assert config["threshold"] == 0.5
+    assert config["iterations"] == 5
+    assert config["hyperparams"]["max_children"] == 3
+    assert config["profile"] == "one cake per hour"
+
+
 def test_max_children_not_exceeded(bakery_tree):
     for node in bakery_tree:
         assert len(node.children) <= 3  # current default value
