@@ -29,7 +29,7 @@ def direct_falsify(
 
     Returns:
         dict:
-            "failed" (np.ndarray[bool]): True where the rollout violated the specification
+            "passed" (np.ndarray[bool]): True where the rollout passed the specification
             "robustness" (np.ndarray[float]): minimum robustness over each rollout (for failures, the robustness at the failing step)
             "loglikelihoods" (np.ndarray[float]): log-likelihood of each rollout's disturbances, up to and including the failing step
             "disturbances" (list[list[Disturbance]]): disturbances sampled at each step of each rollout
