@@ -288,8 +288,8 @@ class HolosMulti(gym.Env):
         reward = power_reward + (1 - boundary_penalty)
         terminated = False
 
-        # if the error is greater than 1%, terminate the run because we don't want it learning that behavior (3% is our actual spec, but tightening this for safety margin)
-        if self.training and (error > 0.01):
+        # if the error is greater than 3%, terminate the run because we don't want it learning that behavior and it already violated our safety margin
+        if self.training and (error > 0.03):
             reward -= 100
             terminated = True
 
