@@ -298,6 +298,16 @@ def extract_path(node):
 
 
 def save_failures(tree, disturbance_dist, results_path):
+    """Saves failures
+
+    Args:
+        tree (list): list of nodes that comprise a tree
+        disturbance_dist (DisturbanceDistribution): disturbance distribution object used for the tree search
+        results_path (str): where to save results
+
+    Returns:
+        list: list of failed nodes
+    """
     Path(results_path).mkdir(exist_ok=True)
     fails = rank_failures(tree, disturbance_dist)
     tree_idx = {id(n): i for i, n in enumerate(tree)}

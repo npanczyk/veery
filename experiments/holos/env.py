@@ -362,7 +362,7 @@ class HolosMulti(gym.Env):
             self._p, self.profile(self.time), threshold, percent=percent
         )
 
-    def render(self, save=True):
+    def render(self, save=False):
         """Converts the history list of lists into a dataframe."""
         run_history = np.array(self.history)
         column_names = [
