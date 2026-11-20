@@ -143,15 +143,16 @@ def train(
 
 if __name__ == "__main__":
     # train a model
-    train(
-        model_name="exp_reward",
-        env_type=env.HolosMulti,
-        training_profile="train",
-        episode_length=200,  # N time steps
-        dt=1,  # seconds in a single time step
-        total_timesteps=int(
-            5e6
-        ),  # the number of timesteps across parallel envs that training will explore for
-        n_envs=10,
-        seed=0,
-    )
+    for seed in [0, 14, 37]:
+        train(
+            model_name="exp_",
+            env_type=env.HolosMulti,
+            training_profile="train",
+            episode_length=200,  # N time steps
+            dt=1,  # seconds in a single time step
+            total_timesteps=int(
+                5e6
+            ),  # the number of timesteps across parallel envs that training will explore for
+            n_envs=10,
+            seed=seed,
+        )

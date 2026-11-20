@@ -112,11 +112,14 @@ class HolosMulti(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 "dp": gym.spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32),
-                "p": gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
+                # high > 1 because power can briefly overshoot full power
+                "p": gym.spaces.Box(low=0, high=1.1, shape=(1,), dtype=np.float32),
                 "pnext": gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
                 "drum_angles": gym.spaces.Box(
                     low=0, high=1, shape=(8,), dtype=np.float32
                 ),
+                "error": gym.spaces.Box(low=-3, high=3, shape=(1,), dtype=np.float32),
+                "ramp": gym.spaces.Box(low=-3, high=3, shape=(1,), dtype=np.float32),
             }
         )
 
@@ -128,7 +131,7 @@ class HolosMulti(gym.Env):
         Args:
             xo (dict): observation disturbance with keys dp, p, and drum_angles
 
-        Returns: dp, p, drum angles, pnext as a dictionary
+        Returns: dp, p, drum angles, pnext, error, ramp as a dictionary
 
         MUST CALL THIS FUNCTION BEFORE setting _last_observation or indexing will be off!
         """
@@ -138,6 +141,8 @@ class HolosMulti(gym.Env):
         noisy_drum_angles = scale(self._drum_angles + xo["drum_angles"], "drum_angles")
         # fuzz the current power
         noisy_power = self._p + xo["p"]
+        # get prescribed power for this step
+        expected_p = self.profile(self.time)
 
         if reset:
             # always assume a steady state start
@@ -155,6 +160,14 @@ class HolosMulti(gym.Env):
             "p": np.array([noisy_power], dtype=np.float32),
             "pnext": np.array([self._pnext], dtype=np.float32),
             "drum_angles": noisy_drum_angles.astype(np.float32),
+            # scale by 100 so a 1% tracking error (or a 1%/step ramp) maps to 1
+            # clip at 3 so the whole range up to the 3% termination threshold is visible
+            "error": np.array(
+                [np.clip((expected_p - noisy_power) * 100, -3, 3)], dtype=np.float32
+            ),
+            "ramp": np.array(
+                [np.clip((self._pnext - expected_p) * 100, -3, 3)], dtype=np.float32
+            ),
         }
 
     def _log_history(self, observation, init=False):
