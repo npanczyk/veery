@@ -1,8 +1,10 @@
 """Direct falsification (naive sampling), following Kochenderfer et al.,
 Algorithms for Validation (MIT Press, 2026), Ch. 4."""
 
+import time
 import numpy as np
 from tqdm import tqdm
+from veery.accessories import CostTracker
 
 
 def direct_falsify(
@@ -36,15 +38,20 @@ def direct_falsify(
             "histories" (list): output of get_history for each rollout, or None
             "p_fail" (float): estimated probability of failure
             "std_err" (float): standard error of p_fail
+            "cost" (dict): attributes of the run's CostTracker (env_steps, rollouts, wall_time_s, n_failures, first_failure_steps)
+            "cumulative_steps" (np.ndarray[int]): env_steps used by the end of each rollout
     """
     rhos = np.zeros(m)
     loglikelihoods = np.zeros(m)
     disturbances = []
     histories = [] if get_history is not None else None
+    cost = CostTracker()
+    cumulative_steps = np.zeros(m, dtype=int)
 
     if seed is not None:
         disturbance_dist.seed(seed)
 
+    t0 = time.perf_counter()
     for i in tqdm(range(m)):
         # seed only the first reset; later resets continue the environment's random stream (gym convention)
         if seed is not None and i == 0:
@@ -62,16 +69,22 @@ def direct_falsify(
             observation, _, terminated, truncated, _ = environment.step(
                 action=action, disturbance=x
             )
+            cost.env_steps += 1
             xs.append(x)
             rho = min(rho, environment.state_robustness(threshold, percent=percent))
             done = terminated or truncated
 
         rhos[i] = rho
+        cost.rollouts += 1
+        cumulative_steps[i] = cost.env_steps
+        if rho <= 0:
+            cost.record_failure()
         # sum over all three components (xo, xa, xs) and every step
         loglikelihoods[i] = sum(np.sum(disturbance_dist.logpdf(x)) for x in xs)
         disturbances.append(xs)
         if get_history is not None:
             histories.append(get_history(environment))
+    cost.wall_time_s = time.perf_counter() - t0
 
     # a rollout fails if its robustness is not positive, the same as check_spec
     passed = rhos > 0
@@ -83,5 +96,8 @@ def direct_falsify(
         "loglikelihoods": loglikelihoods,
         "disturbances": disturbances,
         "histories": histories,
+        "p_fail": float(prob_fail),
         "std_err": float(np.sqrt(prob_fail * (1 - prob_fail) / m)),
+        "cost": vars(cost),
+        "cumulative_steps": cumulative_steps,
     }

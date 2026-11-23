@@ -332,3 +332,43 @@ def test_save_failures(demo_tree, dummy_disturbance_dist):
     rows = save_failures(tree, dummy_disturbance_dist, results_path)
     assert len(rows) == 4
     assert Path(results_path / "failure_sequences.pkl").exists()
+
+
+@pytest.mark.parametrize("n_rollouts", [3, 1])
+def test_run_mcts_cost(
+    bakery, dummy_model, failing_disturbance_dist, tmp_path, n_rollouts
+):
+    import json
+    import pandas as pd
+
+    hyperparams = {
+        "c": 0.5,
+        "k": 1,
+        "alpha": 0.25,
+        "lambda": 0.01,
+        "max_children": 3,
+        "n_rollouts": n_rollouts,
+    }
+    tree = run_MCTS(
+        environment=bakery,
+        model=dummy_model,
+        disturbance_dist=failing_disturbance_dist,
+        results_path=tmp_path,
+        threshold=0.5,
+        iterations=50,
+        hyperparams=hyperparams,
+        percent=False,
+    )
+    with open(tmp_path / "cost.json") as f:
+        cost = json.load(f)
+    failures = pd.read_csv(tmp_path / "failures.csv")
+
+    # every non-root node is scored once, with n_rollouts rollouts
+    assert cost["rollouts"] == hyperparams["n_rollouts"] * (len(tree) - 1)
+    # each expansion takes at least its own step
+    assert cost["env_steps"] >= len(tree) - 1
+    # nodes are appended in creation order, so their costs never decrease
+    node_costs = [n.cost for n in tree]
+    assert node_costs == sorted(node_costs)
+    assert cost["n_failures"] == len(failures) > 0
+    assert cost["first_failure_steps"] == failures["steps_to_find"].min()

@@ -48,6 +48,28 @@ def robustness(actual, desired, threshold, percent=True):
     return rho
 
 
+class CostTracker:
+    """Counts the computational cost of a falsification run. Algorithms update the attributes directly, and vars(cost) gives them as a dict."""
+
+    def __init__(self):
+        self.env_steps = 0  # calls to environment.step
+        self.rollouts = 0  # number of episode simulations
+        self.wall_time_s = 0.0  # time spent in the search loop
+        self.n_failures = 0  # number of failures found
+        self.first_failure_steps = None  # env_steps when the first failure was found
+
+    def record_failure(self):
+        """Marks a failure.
+
+        Returns:
+            int: env_steps so far, i.e. the cost of finding this failure
+        """
+        self.n_failures += 1
+        if self.first_failure_steps is None:
+            self.first_failure_steps = self.env_steps
+        return self.env_steps
+
+
 def rollout_from_snapshot(env, model, snap, disturbance_distribution, get_actual):
     """Runs a rollout of a model from a snapshot until the episode ends. Environments can call this from their own rollout_from_snapshot method, which MCTS uses to score nodes.
 

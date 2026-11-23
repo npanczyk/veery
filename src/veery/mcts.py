@@ -6,8 +6,9 @@ import pandas as pd
 import os
 import json
 import pickle
+import time
 from datetime import datetime
-from veery.accessories import robustness
+from veery.accessories import robustness, CostTracker
 from veery.fuzzing import Disturbance, DisturbanceDistribution, describe_distribution
 from veery.viz import plot_tree, plot_tree_structure
 from tqdm import tqdm
@@ -60,6 +61,7 @@ class MCTS:
         model,
         threshold,
         percent=True,
+        n_rollouts=3,
     ):
         self.c = c  # exploration constant
         self.k = k  # progressive widening constant
@@ -74,6 +76,8 @@ class MCTS:
         self.model = model
         self.threshold = threshold  # specification threshold
         self.percent = percent  # whether threshold is a fractional or flat deviation
+        self.n_rollouts = n_rollouts  # number of rollouts used to score each new node
+        self.cost = CostTracker()
 
     def initialize_tree(self, seed=None):
         # reset the environment
@@ -105,25 +109,27 @@ class MCTS:
             node = selected_child
         return node
 
-    def score(self, snapshot, x, path_rho, N=3):
-        """Scoring function to return Q for a node
+    def score(self, snapshot, x, path_rho):
+        """Scoring function to return Q for a node, averaged over self.n_rollouts rollouts
 
         Args:
             snapshot (dict): Snapshot of environment state from env.get_snapshot()
             x (Disturbance): Disturbance that led to node of interest
-            N (int, optional): number of rollouts, defaults to 3
 
         Returns:
             float: Q value for a node
         """
 
         rho_list = []
-        for i in range(N):
+        for i in range(self.n_rollouts):
             actual, desired = self.environment.rollout_from_snapshot(
                 model=self.model,
                 snap=snapshot,
                 disturbance_distribution=self.disturbance_dist,
             )
+            # actual has one entry per step, so this counts the rollout's steps exactly
+            self.cost.env_steps += len(actual)
+            self.cost.rollouts += 1
             # we want the robustness to be the min robustness of the whole trajectory, including parent nodes, so check for min between path and sampled rollout
             rho_list.append(
                 min(
@@ -149,6 +155,7 @@ class Node:
         Q=0,
         path_rho=np.inf,
         dead=False,
+        cost=0,
     ):
         self.state = state
         self.parent = parent
@@ -158,6 +165,7 @@ class Node:
         self.Q = Q
         self.path_rho = path_rho  # minimum robustness along the path
         self.dead = dead  # dead means terminal or exhausted
+        self.cost = cost  # cumulative env_steps of the search when this node was created
 
     def __repr__(self):
         return (
@@ -203,6 +211,7 @@ class Node:
         obs, _, terminated, truncated, _ = alg.environment.step(
             action=action, disturbance=x
         )
+        alg.cost.env_steps += 1
         # take a snapshot of the environment at this updated state
         snapshot = alg.environment.get_snapshot()
         # get the robustness margin for this step
@@ -221,7 +230,11 @@ class Node:
             N=1,
             Q=q,
             path_rho=child_path_rho,
+            cost=alg.cost.env_steps,
         )
+        # extend is only called on non-terminal nodes, so this is the first failing step on the path (same as rank_failures)
+        if child_path_rho < 0:
+            alg.cost.record_failure()
         self.children.append(child_node)
         tree.append(child_node)
         # now it's time to backpropagate!
@@ -323,6 +336,7 @@ def save_failures(tree, disturbance_dist, results_path):
                 "fail_time": n.state["time"],
                 "path_rho": n.path_rho,
                 "tree_index": tree_idx[id(n)],
+                "steps_to_find": n.cost,
             }
         )
         sequences[rank] = {
@@ -424,10 +438,10 @@ def run_MCTS(
         environment (object): Problem environment that implements the veery interface (profile, state, reset, step, get_snapshot, set_snapshot, rollout_from_snapshot, state_robustness)
         model (object): Controller with an SB3-style predict(observation, deterministic=True) method that returns (action, state)
         disturbance_dist (DisturbanceDistribution): Distribution that disturbances are sampled from
-        results_path (str): Folder where tree.pkl, failures.csv, and failure_sequences.pkl are saved
+        results_path (str): Folder where tree.pkl, failures.csv, failure_sequences.pkl, and cost.json are saved
         threshold (float): Specification threshold, as a deviation from the profile
         iterations (int, optional): Number of MCTS iterations (k_max). Defaults to 100.
-        hyperparams (dict, optional): MCTS hyperparameters with keys "c", "k", "alpha", and "lambda". Defaults to None, which uses c=0.5, k=1, alpha=0.25, lambda=0.01.
+        hyperparams (dict, optional): MCTS hyperparameters with keys "c", "k", "alpha", "lambda", "max_children", and optionally "n_rollouts" (rollouts per node score, defaults to 3). Defaults to None, which uses c=0.5, k=1, alpha=0.25, lambda=0.01, max_children=3.
         percent (bool, optional): True if threshold is a fractional deviation from the profile, False if it is a flat deviation. Defaults to True.
         seed (int, optional): Seeds the disturbance distribution and the environment reset (environment.reset(seed=seed)), so the same seed gives the same tree. Defaults to None, which leaves both unseeded.
         model_name (str, optional): Name of the model recorded in config.json. Defaults to None, which uses the model's class name.
@@ -461,6 +475,7 @@ def run_MCTS(
         model=model,
         threshold=threshold,  # error tolerance for determining failures
         percent=percent,
+        n_rollouts=hyperparams.get("n_rollouts", 3),
     )
 
     # save the run settings before searching, so they're there even if the run crashes
@@ -482,6 +497,8 @@ def run_MCTS(
         disturbance_dist.seed(seed)
     tree = alg.initialize_tree(seed=seed)
 
+    t0 = time.perf_counter()
+    iterations_run = 0
     for i in tqdm(range(alg.k_max)):
         if tree[0].is_dead(alg.max_children):
             print(f"Search space exhausted after {i} iterations!")
@@ -492,6 +509,11 @@ def run_MCTS(
             node.backpropagate(node.Q)
         else:
             node.extend(alg, tree)
+        iterations_run += 1
+    alg.cost.wall_time_s = time.perf_counter() - t0
+
+    with open(f"{results_path}/cost.json", "w") as f:
+        json.dump({**vars(alg.cost), "iterations_run": iterations_run}, f, indent=4)
 
     # pickle the tree object
     try:

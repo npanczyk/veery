@@ -64,3 +64,14 @@ def test_rollout_from_snapshot_runs_to_runtime(
     # starts at t=1, so 4 steps remain before runtime=5
     assert len(actual) == len(desired) == 4
     assert bakery.time == bakery.runtime
+
+
+def test_cost_tracker_record_failure():
+    cost = CostTracker()
+    cost.env_steps = 4
+    assert cost.record_failure() == 4
+    cost.env_steps = 9
+    assert cost.record_failure() == 9
+    # first_failure_steps keeps the first failure, n_failures counts all of them
+    assert cost.first_failure_steps == 4
+    assert cost.n_failures == 2
