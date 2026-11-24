@@ -431,6 +431,8 @@ def run_MCTS(
     seed=None,
     model_name=None,
     extra_config=None,
+    stop_at_first_failure=False,
+    save_tree=True,
 ):
     """Runs Monte Carlo Tree Search for number of defined iterations.
 
@@ -446,6 +448,8 @@ def run_MCTS(
         seed (int, optional): Seeds the disturbance distribution and the environment reset (environment.reset(seed=seed)), so the same seed gives the same tree. Defaults to None, which leaves both unseeded.
         model_name (str, optional): Name of the model recorded in config.json. Defaults to None, which uses the model's class name.
         extra_config (dict, optional): Any other run information to record in config.json (e.g. {"profile": "test"}). Defaults to None.
+        stop_at_first_failure (bool, optional): True to end the search as soon as a failure is found, e.g. when tuning hyperparameters on time to first failure. Defaults to False.
+        save_tree (bool, optional): True to pickle the tree to tree.pkl. Defaults to True.
 
     Returns:
         list: All nodes in the search tree, with the root at index 0
@@ -510,17 +514,21 @@ def run_MCTS(
         else:
             node.extend(alg, tree)
         iterations_run += 1
+        # extend records at most one failure, so this stops right after the first one
+        if stop_at_first_failure and alg.cost.n_failures > 0:
+            break
     alg.cost.wall_time_s = time.perf_counter() - t0
 
     with open(f"{results_path}/cost.json", "w") as f:
         json.dump({**vars(alg.cost), "iterations_run": iterations_run}, f, indent=4)
 
     # pickle the tree object
-    try:
-        with open(f"{results_path}/tree.pkl", "wb") as file:
-            pickle.dump(tree, file)
-    except RecursionError:
-        print("Recursion Error: Could not save tree!")
+    if save_tree:
+        try:
+            with open(f"{results_path}/tree.pkl", "wb") as file:
+                pickle.dump(tree, file)
+        except RecursionError:
+            print("Recursion Error: Could not save tree!")
 
     save_failures(tree, disturbance_dist, results_path)
 

@@ -37,7 +37,7 @@ Issues = "https://github.com/npanczyk/veery/issues"
 
 [project.optional-dependencies]
 dev = ["pytest"]
-experiments = ["stable-baselines3[extra]", "tensorboard", "gymnasium==1.3.0"]
+experiments = ["stable-baselines3[extra]", "tensorboard", "gymnasium==1.3.0", "optuna"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

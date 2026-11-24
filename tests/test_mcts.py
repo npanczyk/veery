@@ -372,3 +372,30 @@ def test_run_mcts_cost(
     assert node_costs == sorted(node_costs)
     assert cost["n_failures"] == len(failures) > 0
     assert cost["first_failure_steps"] == failures["steps_to_find"].min()
+
+
+def test_run_mcts_stop_at_first_failure(
+    bakery, dummy_model, failing_disturbance_dist, tmp_path
+):
+    import json
+
+    iterations = 50
+    run_MCTS(
+        environment=bakery,
+        model=dummy_model,
+        disturbance_dist=failing_disturbance_dist,
+        results_path=tmp_path,
+        threshold=0.5,
+        iterations=iterations,
+        percent=False,
+        stop_at_first_failure=True,
+        save_tree=False,
+    )
+    with open(tmp_path / "cost.json") as f:
+        cost = json.load(f)
+
+    assert not (tmp_path / "tree.pkl").exists()
+    # the search ends on the iteration that found the failure, so nothing is spent after it
+    assert cost["n_failures"] == 1
+    assert cost["first_failure_steps"] == cost["env_steps"]
+    assert cost["iterations_run"] < iterations
